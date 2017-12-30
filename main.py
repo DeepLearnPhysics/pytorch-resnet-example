@@ -38,12 +38,12 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
 
     # training parameters
-    lr = 1.0e-3
+    lr = 1.0e-2
     momentum = 0.9
     weight_decay = 1.0e-4
-    batchsize = 1
+    batchsize = 50
     start_epoch = 0
-    epochs      = 3
+    epochs      = 10
 
     optimizer = torch.optim.SGD(model.parameters(), lr,
                                 momentum=momentum,
