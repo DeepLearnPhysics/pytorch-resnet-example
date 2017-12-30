@@ -2,7 +2,17 @@
 
 Example of training using on 5-particle practice sample
 
-Requires
+### Training
+
+To run the training, first setup the requirements (below) and then run
+
+    python main.py
+
+### Plotting
+
+Plotting training and results coming in future scripts.
+
+### Requirements
 
 * pytorch, of course
 * ROOT6
