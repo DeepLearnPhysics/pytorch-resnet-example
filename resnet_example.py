@@ -109,6 +109,8 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AvgPool2d(7, stride=2)
 
+        self.dropout = nn.Dropout2d(p=0.5,inplace=True)
+
         #print "block.expansion=",block.expansion
         self.fc = nn.Linear(512 * block.expansion, num_classes)
 
@@ -150,6 +152,7 @@ class ResNet(nn.Module):
         x = self.layer4(x)
 
         x = self.avgpool(x)
+        x = self.dropout(x)
         #print "avepool: ",x.data.shape
         x = x.view(x.size(0), -1)
         #print "view: ",x.data.shape

@@ -23,6 +23,14 @@ best_prec1 = 0.0
 
 torch.cuda.device( 1 )
 
+def padandcrop(npimg2d):
+    imgpad  = np.zeros( (260,260), dtype=np.float32 )
+    imgpad[2:258,2:258] = npimg2d[:,:]
+    randx = np.random.randint(0,4)
+    randy = np.random.randint(0,4)
+    return imgpad[randx:randx+256,randy:randy+256]
+    
+
 def main():
 
     global best_prec1
@@ -40,10 +48,12 @@ def main():
     # training parameters
     lr = 1.0e-2
     momentum = 0.9
-    weight_decay = 1.0e-4
-    batchsize = 50
+    weight_decay = 1.0e-2
+    batchsize = 25
     start_epoch = 0
-    epochs      = 10
+    epochs      = 500
+    nbatches_per_epoch = 50000/batchsize
+    nbatches_per_valid = 1000/batchsize
 
     optimizer = torch.optim.SGD(model.parameters(), lr,
                                 momentum=momentum,
@@ -57,6 +67,11 @@ def main():
     
     iotrain.start(batchsize)
     iovalid.start(batchsize)
+
+    # transforms test
+    pad = transforms.Pad(3)
+    recrop = transforms.RandomCrop( (256,256) )
+    compose = transforms.Compose( [pad,recrop] )
     
     if False:
         data = iotrain[0]
@@ -65,7 +80,9 @@ def main():
         img_np = np.zeros( (img.shape[0], 1, 256, 256), dtype=np.float32 )
         lbl_np = np.zeros( (lbl.shape[0]), dtype=np.int )
         for j in range(img.shape[0]):
-            img_np[j,0,:,:] = img[j].reshape( (256,256) )
+            imgtemp = img[j].reshape( (256,256) )
+            print imgtemp.shape
+            img_np[j,0,:,:] = padandcrop(imgtemp)
             lbl_np[j] = np.argmax(lbl[j])
 
         print "Train label"
@@ -87,7 +104,7 @@ def main():
 
         # train for one epoch
         try:
-            train(iotrain, model, criterion, optimizer, 500, epoch, 100)
+            train(iotrain, model, criterion, optimizer, nbatches_per_epoch, epoch, 100)
         except Exception,e:
             print "Error in training routine!"            
             print e.message
@@ -97,7 +114,7 @@ def main():
 
         # evaluate on validation set
         try:
-            prec1 = validate(iovalid, model, criterion, 100, 100)
+            prec1 = validate(iovalid, model, criterion, nbatches_per_valid, 20)
         except Exception,e:
             print "Error in validation routine!"            
             print e.message
@@ -123,33 +140,44 @@ def main():
 def train(train_loader, model, criterion, optimizer, nbatches, epoch, print_freq):
     batch_time = AverageMeter()
     data_time = AverageMeter()
+    format_time = AverageMeter()
+    train_time = AverageMeter()
     losses = AverageMeter()
     top1 = AverageMeter()
 
     # switch to train mode
     model.train()
 
-    end = time.time()
     for i in range(0,nbatches):
-
+        batchstart = time.time()
+    
+        end = time.time()        
         data = train_loader[i]
+        # measure data loading time
+        data_time.update(time.time() - end)
+
+        end = time.time()
         img = data["image"]
         lbl = data["label"]
         img_np = np.zeros( (img.shape[0], 1, 256, 256), dtype=np.float32 )
         lbl_np = np.zeros( (lbl.shape[0] ), dtype=np.int )
+        # batch loop
         for j in range(img.shape[0]):
-            img_np[j,0,:,:] = img[j].reshape( (256,256) )
+            imgtmp = img[j].reshape( (256,256) )
+            img_np[j,0,:,:] = padandcrop(imgtmp)
             lbl_np[j] = np.argmax(lbl[j])
         input  = torch.from_numpy(img_np).cuda()
         target = torch.from_numpy(lbl_np).cuda()
+
+        # measure data formatting time
+        format_time.update(time.time() - end)
         
-        # measure data loading time
-        data_time.update(time.time() - end)
 
         input_var = torch.autograd.Variable(input)
         target_var = torch.autograd.Variable(target)
 
         # compute output
+        end = time.time()
         output = model(input_var)
         loss = criterion(output, target_var)
 
@@ -162,14 +190,21 @@ def train(train_loader, model, criterion, optimizer, nbatches, epoch, print_freq
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        train_time.update(time.time()-end)
 
         # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
+        batch_time.update(time.time() - batchstart)
+
 
         if i % print_freq == 0:
-            status = (epoch,i,len(train_loader),batch_time.val,batch_time.avg,data_time.val,data_time.avg,losses.val,losses.avg,top1.val,top1.avg)
-            print "Epoch: [%d][%d/%d]\tTime %.3f (%.3f)\tData %.3f (%.3f)\tLoss %.3f (%.3f)\tPrec@1 %.3f (%.3f)"%status
+            status = (epoch,i,nbatches,
+                      batch_time.val,batch_time.avg,
+                      data_time.val,data_time.avg,
+                      format_time.val,format_time.avg,
+                      train_time.val,train_time.avg,
+                      losses.val,losses.avg,
+                      top1.val,top1.avg)
+            print "Epoch: [%d][%d/%d]\tTime %.3f (%.3f)\tData %.3f (%.3f)\tFormat %.3f (%.3f)\tTrain %.3f (%.3f)\tLoss %.3f (%.3f)\tPrec@1 %.3f (%.3f)"%status
             #print('Epoch: [{0}][{1}/{2}]\t'
             #      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
             #      'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -217,7 +252,7 @@ def validate(val_loader, model, criterion, nbatches, print_freq):
         end = time.time()
 
         if i % print_freq == 0:
-            status = (i,len(val_loader),batch_time.val,batch_time.avg,losses.val,losses.avg,top1.val,top1.avg)
+            status = (i,nbatches,batch_time.val,batch_time.avg,losses.val,losses.avg,top1.val,top1.avg)
             print "Test: [%d/%d]\tTime %.3f (%.3f)\tLoss %.3f (%.3f)\tPrec@1 %.3f (%.3f)"%status
             #print('Test: [{0}/{1}]\t'
             #      'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -228,7 +263,7 @@ def validate(val_loader, model, criterion, nbatches, print_freq):
 
     #print(' * Prec@1 {top1.avg:.3f}'
     #      .format(top1=top1))
-    print " * Prec@1 %.3f"%(top1.avg)
+    print "Test:Result* Prec@1 %.3f\tLoss %.3f"%(top1.avg,losses.avg)
 
     return float(top1.avg)
 
