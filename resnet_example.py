@@ -161,6 +161,17 @@ class ResNet(nn.Module):
         return x
 
 
+def resnet14(pretrained=False, **kwargs):
+    """Constructs a ResNet-18 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNet(BasicBlock, [1, 1, 1, 1], **kwargs)
+    if pretrained:
+        raise RuntimeError("No pretrained resnet-14.")
+    return model
+
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
 

@@ -24,10 +24,10 @@ best_prec1 = 0.0
 torch.cuda.device( 1 )
 
 def padandcrop(npimg2d):
-    imgpad  = np.zeros( (260,260), dtype=np.float32 )
-    imgpad[2:258,2:258] = npimg2d[:,:]
-    randx = np.random.randint(0,4)
-    randy = np.random.randint(0,4)
+    imgpad  = np.zeros( (264,264), dtype=np.float32 )
+    imgpad[4:256+4,4:256+4] = npimg2d[:,:]
+    randx = np.random.randint(0,8)
+    randy = np.random.randint(0,8)
     return imgpad[randx:randx+256,randy:randy+256]
     
 
@@ -48,12 +48,12 @@ def main():
     # training parameters
     lr = 1.0e-2
     momentum = 0.9
-    weight_decay = 1.0e-2
-    batchsize = 25
+    weight_decay = 1.0e-3
+    batchsize = 50
     start_epoch = 0
     epochs      = 500
-    nbatches_per_epoch = 50000/batchsize
-    nbatches_per_valid = 1000/batchsize
+    nbatches_per_epoch = 10000/batchsize
+    nbatches_per_valid = 5000/batchsize
 
     optimizer = torch.optim.SGD(model.parameters(), lr,
                                 momentum=momentum,
@@ -101,6 +101,7 @@ def main():
     for epoch in range(start_epoch, epochs):
 
         adjust_learning_rate(optimizer, epoch, lr)
+        print "Epoch [%d]: learning rate="%(epoch,lr)
 
         # train for one epoch
         try:
