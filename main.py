@@ -29,12 +29,23 @@ def padandcrop(npimg2d):
     randx = np.random.randint(0,8)
     randy = np.random.randint(0,8)
     return imgpad[randx:randx+256,randy:randy+256]
-    
+
+def padandcropandflip(npimg2d):
+    imgpad  = np.zeros( (264,264), dtype=np.float32 )
+    imgpad[4:256+4,4:256+4] = npimg2d[:,:]
+    if np.random.rand()>0.5:
+        imgpad = imgpad.flip( imgpad, 0 )
+    if np.random.rand()>0.5:
+        imgpad = imgpad.flip( imgpad, 1 )
+    randx = np.random.randint(0,8)
+    randy = np.random.randint(0,8)
+    return imgpad[randx:randx+256,randy:randy+256]
+
 
 def main():
 
     global best_prec1
-    
+
     # create model: loading resnet18 as defined in torchvision module
     model = resnet_example.resnet18(pretrained=False, num_classes=5, input_channels=1)
     model.cuda()
@@ -48,12 +59,13 @@ def main():
     # training parameters
     lr = 1.0e-2
     momentum = 0.9
-    weight_decay = 1.0e-3
-    batchsize = 50
+    weight_decay = 1.0e-4
+    batchsize = 100
+    batchsize_valid = 500
     start_epoch = 0
-    epochs      = 500
+    epochs      = 1500
     nbatches_per_epoch = 10000/batchsize
-    nbatches_per_valid = 5000/batchsize
+    nbatches_per_valid = 1000/batchsize_valid
 
     optimizer = torch.optim.SGD(model.parameters(), lr,
                                 momentum=momentum,
@@ -62,16 +74,18 @@ def main():
     cudnn.benchmark = True
 
     # dataset
-    iotrain = LArCVDataset("train_dataloader.cfg", "ThreadProcessor")
+    iotrain = LArCVDataset("train_dataloader.cfg", "ThreadProcessor", loadallinmem=True)
     iovalid = LArCVDataset("valid_dataloader.cfg", "ThreadProcessorTest")
     
     iotrain.start(batchsize)
-    iovalid.start(batchsize)
+    iovalid.start(batchsize_valid)
 
-    # transforms test
-    pad = transforms.Pad(3)
-    recrop = transforms.RandomCrop( (256,256) )
-    compose = transforms.Compose( [pad,recrop] )
+    # Resume training option
+    if False:
+        checkpoint = torch.load( "checkpoint.pth.p01.tar" )
+        best_prec1 = checkpoint["best_prec1"]
+        model.load_state_dict(checkpoint["state_dict"])
+        optimizer.load_state_dict(checkpoint['optimizer'])
     
     if False:
         data = iotrain[0]
@@ -101,21 +115,25 @@ def main():
     for epoch in range(start_epoch, epochs):
 
         adjust_learning_rate(optimizer, epoch, lr)
-        print "Epoch [%d]: learning rate="%(epoch,lr)
+        print "Epoch [%d]: "%(epoch),
+        for param_group in optimizer.param_groups:
+            print "lr=%.3e"%(param_group['lr']),
+        print
 
         # train for one epoch
         try:
-            train(iotrain, model, criterion, optimizer, nbatches_per_epoch, epoch, 100)
+            train_ave_loss, train_ave_acc = train(iotrain, model, criterion, optimizer, nbatches_per_epoch, epoch, 50)
         except Exception,e:
             print "Error in training routine!"            
             print e.message
             print e.__class__.__name__
             traceback.print_exc(e)
             break
+        print "Epoch [%d] train aveloss=%.3f aveacc=%.3f"%(epoch,train_ave_loss,train_ave_acc)
 
         # evaluate on validation set
         try:
-            prec1 = validate(iovalid, model, criterion, nbatches_per_valid, 20)
+            prec1 = validate(iovalid, model, criterion, nbatches_per_valid, 1)
         except Exception,e:
             print "Error in validation routine!"            
             print e.message
@@ -150,6 +168,7 @@ def train(train_loader, model, criterion, optimizer, nbatches, epoch, print_freq
     model.train()
 
     for i in range(0,nbatches):
+        #print "epoch ",epoch," batch ",i," of ",nbatches
         batchstart = time.time()
     
         end = time.time()        
@@ -165,7 +184,7 @@ def train(train_loader, model, criterion, optimizer, nbatches, epoch, print_freq
         # batch loop
         for j in range(img.shape[0]):
             imgtmp = img[j].reshape( (256,256) )
-            img_np[j,0,:,:] = padandcrop(imgtmp)
+            img_np[j,0,:,:] = padandcropandflip(imgtmp) # data augmentation
             lbl_np[j] = np.argmax(lbl[j])
         input  = torch.from_numpy(img_np).cuda()
         target = torch.from_numpy(lbl_np).cuda()
@@ -213,6 +232,7 @@ def train(train_loader, model, criterion, optimizer, nbatches, epoch, print_freq
             #      'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
             #          epoch, i, len(train_loader), batch_time=batch_time,
             #          data_time=data_time, losses=losses, top1=top1 ))
+    return losses.avg,top1.avg
 
 
 def validate(val_loader, model, criterion, nbatches, print_freq):
@@ -295,7 +315,9 @@ class AverageMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, lr):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = lr * (0.1 ** (epoch // 30))
+    lr = lr * (0.5 ** (epoch // 100))
+    #lr = lr*0.992
+    #print "adjust learning rate to ",lr
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
@@ -315,6 +337,14 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
+def dump_lr_schedule( startlr, numepochs ):
+    for epoch in range(0,numepochs):
+        lr = startlr*(0.5**(epoch//100))
+        if epoch%10==0:
+            print "Epoch [%d] lr=%.3e"%(epoch,lr)
+    print "Epoch [%d] lr=%.3e"%(epoch,lr)
+    return
 
 if __name__ == '__main__':
+    #dump_lr_schedule(1.0e-2, 1500)
     main()
