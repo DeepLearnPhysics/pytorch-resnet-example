@@ -34,9 +34,9 @@ def padandcropandflip(npimg2d):
     imgpad  = np.zeros( (264,264), dtype=np.float32 )
     imgpad[4:256+4,4:256+4] = npimg2d[:,:]
     if np.random.rand()>0.5:
-        imgpad = imgpad.flip( imgpad, 0 )
+        imgpad = np.flip( imgpad, 0 )
     if np.random.rand()>0.5:
-        imgpad = imgpad.flip( imgpad, 1 )
+        imgpad = np.flip( imgpad, 1 )
     randx = np.random.randint(0,8)
     randy = np.random.randint(0,8)
     return imgpad[randx:randx+256,randy:randy+256]
@@ -57,7 +57,7 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
 
     # training parameters
-    lr = 1.0e-2
+    lr = 1.0e-3
     momentum = 0.9
     weight_decay = 1.0e-4
     batchsize = 100
