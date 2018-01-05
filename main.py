@@ -47,7 +47,8 @@ def main():
     global best_prec1
 
     # create model: loading resnet18 as defined in torchvision module
-    model = resnet_example.resnet18(pretrained=False, num_classes=5, input_channels=1)
+    #model = resnet_example.resnet18(pretrained=False, num_classes=5, input_channels=1)
+    model = resnet_example.resnet14(pretrained=False, num_classes=5, input_channels=1)
     model.cuda()
 
     print "Loaded model: ",model
@@ -59,8 +60,8 @@ def main():
     # training parameters
     lr = 1.0e-3
     momentum = 0.9
-    weight_decay = 1.0e-4
-    batchsize = 100
+    weight_decay = 1.0e-3
+    batchsize = 50
     batchsize_valid = 500
     start_epoch = 0
     epochs      = 1500
@@ -149,7 +150,15 @@ def main():
             'state_dict': model.state_dict(),
             'best_prec1': best_prec1,
             'optimizer' : optimizer.state_dict(),
-        }, is_best)
+        }, is_best, -1)
+        if epoch==5*50:
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict': model.state_dict(),
+                'best_prec1': best_prec1,
+                'optimizer' : optimizer.state_dict(),
+            }, False, epoch)
+            
 
     iotrain.stop()
     iovalid.stop()
@@ -289,7 +298,9 @@ def validate(val_loader, model, criterion, nbatches, print_freq):
     return float(top1.avg)
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, p, filename='checkpoint.pth.tar'):
+    if p>0:
+        filename = "checkpoint.%dth.tar"%(p)
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
@@ -315,7 +326,8 @@ class AverageMeter(object):
 
 def adjust_learning_rate(optimizer, epoch, lr):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = lr * (0.5 ** (epoch // 100))
+    #lr = lr * (0.5 ** (epoch // 300))
+    lr = lr
     #lr = lr*0.992
     #print "adjust learning rate to ",lr
     for param_group in optimizer.param_groups:
@@ -339,12 +351,12 @@ def accuracy(output, target, topk=(1,)):
 
 def dump_lr_schedule( startlr, numepochs ):
     for epoch in range(0,numepochs):
-        lr = startlr*(0.5**(epoch//100))
+        lr = startlr*(0.5**(epoch//300))
         if epoch%10==0:
             print "Epoch [%d] lr=%.3e"%(epoch,lr)
     print "Epoch [%d] lr=%.3e"%(epoch,lr)
     return
 
 if __name__ == '__main__':
-    #dump_lr_schedule(1.0e-2, 1500)
+    #dump_lr_schedule(1.0e-2, 4000)
     main()
