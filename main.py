@@ -59,11 +59,11 @@ def main():
     criterion = nn.CrossEntropyLoss().cuda()
 
     # training parameters
-    lr = 1.0e-4
+    lr = 1.0e-2
     momentum = 0.9
-    weight_decay = 1.0e-3
-    batchsize = 20
-    batchsize_valid = 20
+    weight_decay = 1.0e-4
+    batchsize = 50
+    batchsize_valid = 50
     start_epoch = 0
     epochs      = 1500
     nbatches_per_epoch = int(100/batchsize)
@@ -206,16 +206,20 @@ def train(train_loader, model, criterion, optimizer, nbatches, epoch, print_freq
 
         # compute output
         end = time.time()
+        # forward
         output = model(input_var)
+        # loss calculation
         loss = criterion(output, target_var)
-        # measure accuracy and record loss
-        prec1 = accuracy(output.detach(), target_var, topk=(1,))        
-        losses.update(loss.detach().cpu().item(), input_var.size(0))
-        top1.update(prec1[0], input_var.size(0))
-
         # compute gradient and do SGD step
         loss.backward()
         optimizer.step()
+
+        # measure accuracy and record loss
+        with torch.no_grad():
+            prec1 = accuracy(output.detach(), target_var, topk=(1,))        
+            losses.update(loss.detach().cpu().item(), input_var.size(0))
+            top1.update(prec1[0], input_var.size(0))
+
         train_time.update(time.time()-end)
 
         # measure elapsed time
