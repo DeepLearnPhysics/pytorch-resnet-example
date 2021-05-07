@@ -1,12 +1,12 @@
 #!/bin/bash
 
 home=$PWD
-source ~/setup_root6.sh
+source /usr/local/root/6.16.00_python3/bin/thisroot.sh
 
 cd ../larcv2
 source configure.sh
 
-cd ../torchlarcvdataset
+cd ../larcvdataset
 source setenv.sh
 
 cd $home
