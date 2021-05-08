@@ -62,12 +62,12 @@ def main():
     lr = 1.0e-2
     momentum = 0.9
     weight_decay = 1.0e-4
-    batchsize = 50
-    batchsize_valid = 50
+    batchsize = 64
+    batchsize_valid = 64
     start_epoch = 0
-    epochs      = 1500
-    nbatches_per_epoch = int(100/batchsize)
-    nbatches_per_valid = int(100/batchsize_valid)
+    epochs      = 50000
+    nbatches_per_epoch = int(epochs/batchsize)
+    nbatches_per_valid = int(epochs/batchsize_valid)
 
     optimizer = torch.optim.SGD(model.parameters(), lr,
                                 momentum=momentum,
@@ -76,7 +76,7 @@ def main():
     cudnn.benchmark = True
 
     # dataset
-    iotrain = LArCVDataset("train_dataloader.cfg", "ThreadProcessor", loadallinmem=False)
+    iotrain = LArCVDataset("train_dataloader.cfg", "ThreadProcessor", loadallinmem=True)
     iovalid = LArCVDataset("valid_dataloader.cfg", "ThreadProcessorTest",loadallinmem=False)
     
     iotrain.start(batchsize)
